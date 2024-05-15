@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { SectorCoordinates } from "@/pages/spot";
 import { PrismaClient } from "@prisma/client";
+import { compare } from "bcrypt";
 const prisma = new PrismaClient();
 
 export default async function handler(
@@ -11,7 +12,7 @@ export default async function handler(
   const rowStart = parseInt(body.rowStart as string, 10);
   const colStart = parseInt(body.colStart as string, 10);
   const index = parseInt(body.index as string, 10);
-  console.log(body);
+
   switch (method) {
     case "GET":
       // @ts-ignore
@@ -21,13 +22,24 @@ export default async function handler(
       res.end();
       break;
     case "POST":
-      await prisma.sectorCoordinates.update({
+      compare(body.password, process.env.PASSWORD as string, (err, result) => {
+        if (err) {
+          res.status(500).json({ error: "Internal Server Error" });
+          res.end();
+          return;
+        }
+        if (!result) {
+          res.status(401);
+          res.end();
+        }
+      });
+      const sector: SectorCoordinates = await prisma.sectorCoordinates.update({
         where: {
           index: index,
         },
         data: {
-          rowStart: rowStart,
-          colStart: colStart,
+          rowStart,
+          colStart,
         },
       });
       res.status(200);

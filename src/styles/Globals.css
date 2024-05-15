@@ -3,10 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    height: 100%;
+    font-size: 10px;
+  }
+  #__next {
+    height: 100%;
+  }
+
+  @media screen and (min-width: 1150px) {
     html {
-        height: 100%
+      font-size: 16px;
     }
-    #__next {
-        height: 100%;
-    }
+  }
 }

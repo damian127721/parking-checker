@@ -14,12 +14,21 @@ import {
   Spinner,
   Text,
   Grid,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
+  Input,
 } from "@chakra-ui/react";
 import { useColorMode } from "@chakra-ui/color-mode";
 import { InfoOutlineIcon, MoonIcon, SunIcon } from "@chakra-ui/icons";
-import { use, useEffect, useRef, useState } from "react";
+import React, { use, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
-import { Spot } from "@/pages/spot";
+import { Spot, SectorCoordinates } from "@/pages/spot";
 
 const alphabet = [
   "A",
@@ -51,6 +60,15 @@ const alphabet = [
 ];
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcherP = (url: string, rawObject: Object) => {
+  return fetch(url, {
+    method: "POST",
+    body: JSON.stringify(rawObject),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+};
 
 function uniqueLetterCount(Spots: Spot[]): number {
   let newArray: String[] = ["a"];
@@ -95,88 +113,170 @@ export default function Home() {
   let Incrementer: number = 0;
   let statusColor: string;
   let sectors = [...Array(Math.round(uniqueLetterCount(Spots) / 2)).keys()];
+  console.log(sectors);
   const { colorMode, toggleColorMode } = useColorMode();
 
+  const [isUsingMobile, setIsUsingMobile] = useState(false);
+  console.log(isUsingMobile);
+  useEffect(() => {
+    let checkMobile = false;
+    if ("maxTouchPoints" in navigator) {
+      checkMobile = navigator.maxTouchPoints > 0;
+      setIsUsingMobile(checkMobile);
+    }
+  }, []);
+
   /* <-- EDITABILITY FEATURE --> */
-  const { data: sectorData, error: sectorError } = useSWR(
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const startingCoordinates = useRef({ x: 0, y: 0 });
+  const mouseDown = useRef<number>(-1);
+  const editAccessGranted = useRef<boolean>(false);
+  const editAccessPassword = useRef("");
+  const rows: number = 11;
+  const cols: number = 6;
+  const maxSectors: number = 10;
+  const {
+    data: sectorData,
+    error: sectorError,
+  }: { data: SectorCoordinates[]; error: any } = useSWR(
     "/api/sectorCoordinates",
     fetcher
   );
 
-  useEffect(() => {
-    if (sectorData) {
-      setSectorCoordinates(sectorData);
-    }
-  }, [sectorData, sectorError]);
-
   const [sectorCoordinates, setSectorCoordinates] = useState(() => {
     let newArr: any[] = [];
-    for (let i = 0; i < sectors.length + 2; i++) {
-      // +2 because of time when Spots arent loaded yet
+    for (let i = 0; i < maxSectors; i++) {
       newArr.push({ rowStart: 1, colStart: i * 2 });
     }
     return newArr;
   });
-  const startingCoordinates = useRef({ x: 0, y: 0 });
-  const mouseDown = useRef(-1);
+  const [rowsEnds, setRowsEnds] = useState<number[]>([]);
 
-  function mouseDownHandler(e: any, sector: number) {
+  useEffect(() => {
+    if (sectorData) {
+      setSectorCoordinates(
+        sectorData.sort(
+          ({ index: a }: { index: number }, { index: b }: { index: number }) =>
+            a - b
+        )
+      );
+    }
+  }, [sectorData]);
+
+  useEffect(() => {
+    let increment: number = 0;
+    const rowsEndsArray: number[] = sectors.map((sector: number) => {
+      increment++;
+      return (
+        sectorCoordinates[sector].rowStart +
+        ((): number => {
+          let firstCol: Spot[] = Spots.filter(
+            (current: Spot) =>
+              current.id[0] == alphabet[sector + increment - 1].toLowerCase()
+          );
+          let secondCol: Spot[] = Spots.filter(
+            (current: Spot) =>
+              current.id[0] == alphabet[sector + increment].toLowerCase()
+          );
+          return firstCol.length > secondCol.length
+            ? firstCol.length
+            : secondCol.length;
+        })()
+      );
+    });
+    setRowsEnds(rowsEndsArray);
+  }, [sectorCoordinates, Spots]);
+
+  function mouseDownHandler(e: React.MouseEvent, sector: number) {
+    if (editAccessGranted.current === false) return;
     startingCoordinates.current = {
       x: e.clientX,
       y: e.clientY,
     };
     mouseDown.current = sector;
-    console.log(startingCoordinates.current);
   }
 
-  function mouseUpHandler(e: any) {
-    console.log(mouseDown.current);
-    fetch("/api/sectorCoordinates", {
-      method: "POST",
-      body: JSON.stringify({
-        index: mouseDown.current + 1, // +1 because db indexing starts from 1
-        rowStart: sectorCoordinates[mouseDown.current]?.rowStart,
-        colStart: sectorCoordinates[mouseDown.current]?.colStart,
-      }),
-      headers: {
-        "Content-Type": "application/json",
-      },
+  function mouseUpHandler(e: React.MouseEvent) {
+    if (mouseDown.current === -1) return;
+    fetcherP("/api/sectorCoordinates", {
+      password: editAccessPassword.current,
+      index: mouseDown.current + 1, // +1 because db indexing starts from 1
+      rowStart: sectorCoordinates[mouseDown.current]?.rowStart,
+      colStart: sectorCoordinates[mouseDown.current]?.colStart,
     });
+
     mouseDown.current = -1;
   }
 
-  function mouseMoveHandler(e: any) {
+  function mouseMoveHandler(e: React.MouseEvent) {
     if (mouseDown.current != -1) {
       const stepX = 80;
       const stepY = 80;
       let xDiff = e.clientX - startingCoordinates.current.x;
       let yDiff = e.clientY - startingCoordinates.current.y;
       if (Math.abs(xDiff) > stepX) {
-        console.log("stepX");
         startingCoordinates.current = {
           x: e.clientX,
           y: startingCoordinates.current.y,
         };
         setSectorCoordinates((prev) => {
           let newCoordinates = [...prev];
-          newCoordinates[mouseDown.current].colStart += xDiff > 0 ? 1 : -1;
+          if (xDiff > 0 && prev[mouseDown.current].colStart + 1 <= cols) {
+            // because of 1 to be moved
+            newCoordinates[mouseDown.current].colStart += 1;
+          }
+          if (xDiff < 0 && prev[mouseDown.current].colStart - 1 >= 1) {
+            newCoordinates[mouseDown.current].colStart -= 1;
+          }
           return newCoordinates;
         });
       }
       if (Math.abs(yDiff) > stepY) {
-        console.log("stepY");
         startingCoordinates.current = {
           x: startingCoordinates.current.x,
           y: e.clientY,
         };
         setSectorCoordinates((prev) => {
           let newCoordinates = [...prev];
-          newCoordinates[mouseDown.current].rowStart += yDiff > 0 ? 1 : -1;
+          if (
+            yDiff < 0 &&
+            newCoordinates[mouseDown.current].rowStart - 1 >= 1
+          ) {
+            newCoordinates[mouseDown.current].rowStart -= 1;
+          }
+          if (yDiff > 0 && rowsEnds[mouseDown.current] + 1 <= rows + 1) {
+            //rows + 1 because there is one more line than rows
+            newCoordinates[mouseDown.current].rowStart += 1;
+          }
           return newCoordinates;
         });
       }
     }
   }
+
+  function passwordAuthorizer() {
+    fetcherP("/api/authorize", { password: editAccessPassword.current }).then(
+      (res) => {
+        if (res.status === 200) {
+          editAccessGranted.current = true;
+        } else {
+          editAccessGranted.current = false;
+        }
+      }
+    );
+  }
+
+  function adminLoginModalLogic(e: React.KeyboardEvent) {
+    // CTRL + A, opens admin login modal for access to editability
+    if (e.key === "a") {
+      if (e.getModifierState("Control")) {
+        editAccessGranted.current = false;
+        editAccessPassword.current = "";
+        onOpen();
+      }
+    }
+  }
+
   /* <--------> */
 
   return (
@@ -184,12 +284,49 @@ export default function Home() {
       h="100%"
       onMouseMove={(e) => mouseMoveHandler(e)}
       onMouseUp={(e) => mouseUpHandler(e)}
+      onKeyDown={(e) => {
+        adminLoginModalLogic(e);
+      }}
+      tabIndex={0}
     >
       <Flex flexDirection="column" align="center" h="fit-content" mb={2}>
-        <Text as="h1" fontWeight="thin" fontSize="4xl" mb={2} align="center">
+        <Modal isOpen={isOpen} onClose={onClose}>
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>Admin login</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <Input
+                placeholder="Password"
+                onChange={(e) => {
+                  editAccessPassword.current = e.target.value;
+                }}
+              />
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  passwordAuthorizer();
+                  onClose();
+                }}
+              >
+                Login
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+        <Text
+          as="h1"
+          fontWeight="thin"
+          fontSize="4xl"
+          mb={2}
+          align="center"
+          hidden={isUsingMobile}
+        >
           Parking checker system
         </Text>
-        <Flex gap={5}>
+        <Flex gap={5} hidden={isUsingMobile}>
           <IconButton aria-label="Toggle Mode" onClick={toggleColorMode}>
             {colorMode === "light" ? <MoonIcon /> : <SunIcon />}
           </IconButton>
@@ -220,56 +357,55 @@ export default function Home() {
             </PopoverContent>
           </Popover>
         </Flex>
-        <Flex>
+        <Flex flexDirection={"column"} h={"100vh"}>
+          <IconButton
+            aria-label="Toggle Mode"
+            onClick={toggleColorMode}
+            hidden={!isUsingMobile}
+          >
+            {colorMode === "light" ? <MoonIcon /> : <SunIcon />}
+          </IconButton>
           {spinner ? (
-            <Spinner size="xl" mt={100} color="teal.500" />
+            <Spinner size="xl" mt={{ base: 100 }} color="teal.500" />
           ) : (
             <Grid
-              h="80vh"
-              w="fit-content"
-              templateColumns={`repeat(${6}, 1fr)`}
-              p={5}
-              m={5}
+              flexShrink={2}
+              h={isUsingMobile ? "100vh" : { md: "50rem" }}
+              w={isUsingMobile ? "100%" : "fit-content"}
+              templateColumns={`repeat(${cols}, 1fr)`}
+              p={isUsingMobile ? 0 : { base: 0, md: 5 }}
+              m={isUsingMobile ? 0 : { base: 0, md: 5 }}
+              mt={5}
               bg={colorMode === "light" ? "gray.100" : "gray.700"}
-              templateRows={`repeat(${11}, 9%)`}
+              templateRows={{
+                base: `repeat(${rows}, 26px)`,
+                md: `repeat(${rows}, 36px)`,
+                xl: `repeat(${rows}, 60px)`,
+              }}
               grid-flow-row="true"
-              border={"1px solid"}
-              gap={1}
+              border={isUsingMobile ? "" : "1px solid"}
+              gap={{ base: 0, md: 1 }}
             >
               {sectors.map((sector: number) => {
                 Incrementer += 1;
                 return (
                   <Flex
                     onMouseDown={(e) => mouseDownHandler(e, sector)}
-                    bg={
-                      colorMode === "light"
-                        ? "blackAlpha.400"
-                        : "whiteAlpha.400"
-                    }
+                    bg={{
+                      base: "transparent",
+                      md:
+                        colorMode === "light"
+                          ? "blackAlpha.400"
+                          : "whiteAlpha.400",
+                    }}
                     direction="row"
                     key={sector}
-                    w="fit-content"
+                    w="100%"
                     borderRadius="md"
                     gridRowStart={sectorCoordinates[sector].rowStart}
-                    gridRowEnd={
-                      sectorCoordinates[sector].rowStart +
-                      ((): number => {
-                        let firstCol: Spot[] = Spots.filter(
-                          (current: Spot) =>
-                            current.id[0] ==
-                            alphabet[sector + Incrementer - 1].toLowerCase()
-                        );
-                        let secondCol: Spot[] = Spots.filter(
-                          (current: Spot) =>
-                            current.id[0] ==
-                            alphabet[sector + Incrementer].toLowerCase()
-                        );
-                        return firstCol.length > secondCol.length
-                          ? firstCol.length
-                          : secondCol.length;
-                      })()
-                    }
+                    gridRowEnd={rowsEnds[sector]}
                     gridColumnStart={sectorCoordinates[sector].colStart}
+                    border={{ base: "1px solid", md: "none" }}
                   >
                     <Flex direction="column">
                       {Spots.map((current) => {
@@ -281,14 +417,14 @@ export default function Home() {
                           else if (current.status === 2) statusColor = "red";
                           else statusColor = "purple";
                           return (
-                            <span key={current.id}>
+                            <Box key={current.id} flexGrow={1}>
                               <Popover>
                                 <PopoverTrigger>
                                   <Button
                                     color="white"
-                                    p={3}
-                                    px={5}
-                                    m={3}
+                                    p={{ base: 0, md: 3 }}
+                                    px={{ base: 0, md: 5 }}
+                                    m={{ base: 0, md: 3 }}
                                     bg={statusColor + ".500"}
                                     borderRadius="md"
                                     className="tw-uppercase"
@@ -300,7 +436,7 @@ export default function Home() {
                                   <PopoverArrow />
                                   <PopoverCloseButton />
                                   <PopoverHeader>
-                                    <span className="tw-uppercase">
+                                    <span className="id tw-uppercase">
                                       {current.id}
                                     </span>{" "}
                                     | Parking slot
@@ -338,7 +474,7 @@ export default function Home() {
                                 w="100%"
                                 h="2px"
                               />
-                            </span>
+                            </Box>
                           );
                         }
                       })}
@@ -354,14 +490,14 @@ export default function Home() {
                           else if (current.status === 2) statusColor = "red";
                           else statusColor = "purple";
                           return (
-                            <span key={current.id}>
+                            <Box key={current.id} flexGrow={1}>
                               <Popover>
                                 <PopoverTrigger>
                                   <Button
                                     color="white"
-                                    p={3}
-                                    px={5}
-                                    m={3}
+                                    p={{ base: 0, md: 3 }}
+                                    px={{ base: 0, md: 5 }}
+                                    m={{ base: 0, md: 3 }}
                                     bg={statusColor + ".500"}
                                     borderRadius="md"
                                     className="tw-uppercase"
@@ -386,7 +522,7 @@ export default function Home() {
                                           : statusColor + ".300"
                                       }
                                     >
-                                      <span className="tw-uppercase">
+                                      <span className="id tw-uppercase">
                                         {current.id}
                                       </span>{" "}
                                       is
@@ -411,7 +547,7 @@ export default function Home() {
                                 w="100%"
                                 h="2px"
                               />
-                            </span>
+                            </Box>
                           );
                         }
                       })}
@@ -422,7 +558,7 @@ export default function Home() {
             </Grid>
           )}
         </Flex>
-        <Text fontSize="xs" mt={10} fontWeight="100">
+        <Text fontSize="xs" mt={10} fontWeight="100" hidden={isUsingMobile}>
           Made by Radim Kotajny & Filip Valentiny | &copy;{" "}
           {new Date().getFullYear()}
         </Text>
