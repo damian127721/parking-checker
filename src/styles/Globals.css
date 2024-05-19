@@ -11,9 +11,27 @@
     height: 100%;
   }
 
+  @media screen and (min-width: 370px) {
+    html {
+      font-size: 14px;
+    }
+  }
+
+  @media screen and (min-width: 768px) {
+    html {
+      font-size: 10px;
+    }
+  }
+
   @media screen and (min-width: 1150px) {
     html {
       font-size: 16px;
     }
+  }
+  .rotateIcon {
+    display: none;
+  }
+  .sector:hover .rotateIcon {
+    display: block;
   }
 }

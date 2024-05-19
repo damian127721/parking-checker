@@ -20,4 +20,5 @@ model SectorCoordinates {
     index Int @unique
     rowStart Int
     colStart Int
+    rotated Int @default(0)
 }

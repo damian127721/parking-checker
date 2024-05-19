@@ -25,7 +25,12 @@ import {
   Input,
 } from "@chakra-ui/react";
 import { useColorMode } from "@chakra-ui/color-mode";
-import { InfoOutlineIcon, MoonIcon, SunIcon } from "@chakra-ui/icons";
+import {
+  InfoOutlineIcon,
+  MoonIcon,
+  SunIcon,
+  RepeatIcon,
+} from "@chakra-ui/icons";
 import React, { use, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Spot, SectorCoordinates } from "@/pages/spot";
@@ -74,7 +79,7 @@ function uniqueLetterCount(Spots: Spot[]): number {
   let newArray: String[] = ["a"];
 
   Spots.map((spot: Spot): void => {
-    newArray.push(spot.id[0]);
+    newArray.push(spot.id[0]?.toLowerCase());
   });
   let uniqueChars: String[] = [...new Set(newArray)];
   return uniqueChars.length;
@@ -89,7 +94,7 @@ export default function Home() {
   };
   const url = "/api/parking";
 
-  const [Spots, setSpots] = useState([initialSpot]);
+  const [Spots, setSpots] = useState<Spot[]>([]);
   const { data, error } = useSWR(url, fetcher, { refreshInterval: 15000 });
 
   // remove initial state collision
@@ -107,24 +112,16 @@ export default function Home() {
         }
       });
       setSpots([...Spots]);
+      console.log(Spots);
       setSpinner(false);
     }
   }, [data, error]);
   let Incrementer: number = 0;
   let statusColor: string;
-  let sectors = [...Array(Math.round(uniqueLetterCount(Spots) / 2)).keys()];
+  let sectors = [...Array(Math.round(uniqueLetterCount(Spots) / 2) + 1).keys()];
   console.log(sectors);
-  const { colorMode, toggleColorMode } = useColorMode();
 
-  const [isUsingMobile, setIsUsingMobile] = useState(false);
-  console.log(isUsingMobile);
-  useEffect(() => {
-    let checkMobile = false;
-    if ("maxTouchPoints" in navigator) {
-      checkMobile = navigator.maxTouchPoints > 0;
-      setIsUsingMobile(checkMobile);
-    }
-  }, []);
+  const { colorMode, toggleColorMode } = useColorMode();
 
   /* <-- EDITABILITY FEATURE --> */
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -133,7 +130,9 @@ export default function Home() {
   const editAccessGranted = useRef<boolean>(false);
   const editAccessPassword = useRef("");
   const rows: number = 11;
-  const cols: number = 6;
+  const cols: number = 5;
+  const [minCols, setMinCols] = useState<number>(1);
+  const [minRows, setMinRows] = useState<number>(1);
   const maxSectors: number = 10;
   const {
     data: sectorData,
@@ -160,6 +159,7 @@ export default function Home() {
             a - b
         )
       );
+      setMinCols(Math.max(...sectorData.map((item) => item.colStart)));
     }
   }, [sectorData]);
 
@@ -172,11 +172,17 @@ export default function Home() {
         ((): number => {
           let firstCol: Spot[] = Spots.filter(
             (current: Spot) =>
-              current.id[0] == alphabet[sector + increment - 1].toLowerCase()
+              current.id[0].toLowerCase() ==
+              alphabet[sector + increment - 1].toLowerCase()
           );
           let secondCol: Spot[] = Spots.filter(
             (current: Spot) =>
-              current.id[0] == alphabet[sector + increment].toLowerCase()
+              current.id[0].toLowerCase() ==
+              alphabet[sector + increment].toLowerCase()
+          );
+          console.log(
+            alphabet[sector + increment - 1].toLowerCase(),
+            alphabet[sector + increment].toLowerCase()
           );
           return firstCol.length > secondCol.length
             ? firstCol.length
@@ -185,6 +191,7 @@ export default function Home() {
       );
     });
     setRowsEnds(rowsEndsArray);
+    setMinRows(Math.max(...rowsEndsArray) - 1);
   }, [sectorCoordinates, Spots]);
 
   function mouseDownHandler(e: React.MouseEvent, sector: number) {
@@ -289,7 +296,7 @@ export default function Home() {
       }}
       tabIndex={0}
     >
-      <Flex flexDirection="column" align="center" h="fit-content" mb={2}>
+      <Flex flexDirection="column" align="center" h="100%" mb={2} w="100%">
         <Modal isOpen={isOpen} onClose={onClose}>
           <ModalOverlay />
           <ModalContent>
@@ -322,11 +329,11 @@ export default function Home() {
           fontSize="4xl"
           mb={2}
           align="center"
-          hidden={isUsingMobile}
+          display={{ base: "none", md: "block" }}
         >
           Parking checker system
         </Text>
-        <Flex gap={5} hidden={isUsingMobile}>
+        <Flex gap={5} display={{ base: "none", md: "block" }}>
           <IconButton aria-label="Toggle Mode" onClick={toggleColorMode}>
             {colorMode === "light" ? <MoonIcon /> : <SunIcon />}
           </IconButton>
@@ -357,11 +364,16 @@ export default function Home() {
             </PopoverContent>
           </Popover>
         </Flex>
-        <Flex flexDirection={"column"} h={"100vh"}>
+        <Flex
+          flexDirection={"column"}
+          minH={{ base: "98vh", md: "fit-content" }}
+          justifyContent="center"
+        >
           <IconButton
+            alignSelf={"flex-end"}
             aria-label="Toggle Mode"
             onClick={toggleColorMode}
-            hidden={!isUsingMobile}
+            display={{ base: "block", md: "none" }}
           >
             {colorMode === "light" ? <MoonIcon /> : <SunIcon />}
           </IconButton>
@@ -370,20 +382,23 @@ export default function Home() {
           ) : (
             <Grid
               flexShrink={2}
-              h={isUsingMobile ? "100vh" : { md: "50rem" }}
-              w={isUsingMobile ? "100%" : "fit-content"}
-              templateColumns={`repeat(${cols}, 1fr)`}
-              p={isUsingMobile ? 0 : { base: 0, md: 5 }}
-              m={isUsingMobile ? 0 : { base: 0, md: 5 }}
+              h={{ base: "fit-content" }}
+              w={{ base: "100%", md: "fit-content" }}
+              templateColumns={{
+                base: `repeat(${minCols}, 1fr)`,
+                md: `repeat(${cols}, 1fr)`,
+              }}
+              p={{ base: 0, md: 5 }}
+              m={{ base: 0, md: 5 }}
               mt={5}
               bg={colorMode === "light" ? "gray.100" : "gray.700"}
               templateRows={{
-                base: `repeat(${rows}, 26px)`,
+                base: `repeat(${minRows}, 36px)`,
                 md: `repeat(${rows}, 36px)`,
-                xl: `repeat(${rows}, 60px)`,
+                xl: `repeat(${rows}, 1fr)`,
               }}
               grid-flow-row="true"
-              border={isUsingMobile ? "" : "1px solid"}
+              border={{ base: "0", md: "1px solid" }}
               gap={{ base: 0, md: 1 }}
             >
               {sectors.map((sector: number) => {
@@ -406,21 +421,27 @@ export default function Home() {
                     gridRowEnd={rowsEnds[sector]}
                     gridColumnStart={sectorCoordinates[sector].colStart}
                     border={{ base: "1px solid", md: "none" }}
+                    className="sector"
+                    /* position={"relative"} */
                   >
-                    <Flex direction="column">
+                    <Flex direction="column" w="100%">
                       {Spots.map((current) => {
                         if (
-                          current.id[0] ==
+                          current.id[0]?.toLowerCase() ==
                           alphabet[sector + Incrementer - 1].toLowerCase()
                         ) {
                           if (current.status === 1) statusColor = "teal";
                           else if (current.status === 2) statusColor = "red";
                           else statusColor = "purple";
                           return (
-                            <Box key={current.id} flexGrow={1}>
+                            <Box key={current.id}>
                               <Popover>
                                 <PopoverTrigger>
                                   <Button
+                                    w={{
+                                      base: "fit-content",
+                                      md: "fit-content",
+                                    }}
                                     color="white"
                                     p={{ base: 0, md: 3 }}
                                     px={{ base: 0, md: 5 }}
@@ -473,6 +494,7 @@ export default function Home() {
                                 orientation="horizontal"
                                 w="100%"
                                 h="2px"
+                                display={{ base: "none", md: "block" }}
                               />
                             </Box>
                           );
@@ -480,17 +502,17 @@ export default function Home() {
                       })}
                     </Flex>
                     <Divider orientation="vertical" />
-                    <Flex direction="column">
+                    <Flex direction="column" w="100%">
                       {Spots.map((current) => {
                         if (
-                          current.id[0] ==
+                          current.id[0]?.toLowerCase() ==
                           alphabet[sector + Incrementer].toLowerCase()
                         ) {
                           if (current.status === 1) statusColor = "teal";
                           else if (current.status === 2) statusColor = "red";
                           else statusColor = "purple";
                           return (
-                            <Box key={current.id} flexGrow={1}>
+                            <Box key={current.id}>
                               <Popover>
                                 <PopoverTrigger>
                                   <Button
@@ -501,6 +523,7 @@ export default function Home() {
                                     bg={statusColor + ".500"}
                                     borderRadius="md"
                                     className="tw-uppercase"
+                                    w={{ base: "100%", md: "fit-content" }}
                                   >
                                     {current.id}
                                   </Button>
@@ -546,21 +569,39 @@ export default function Home() {
                                 orientation="horizontal"
                                 w="100%"
                                 h="2px"
+                                display={{ base: "none", md: "block" }}
                               />
                             </Box>
                           );
                         }
                       })}
                     </Flex>
+                    <IconButton
+                      className="rotateIcon"
+                      aria-label="Toggle Mode"
+                      position={"absolute"}
+                      bottom={0}
+                      right={0}
+                      display="none"
+                      hidden={editAccessGranted.current ? false : true}
+                      /* onClick={toggleColorMode} */
+                    >
+                      <RepeatIcon />
+                    </IconButton>
                   </Flex>
                 );
               })}
             </Grid>
           )}
         </Flex>
-        <Text fontSize="xs" mt={10} fontWeight="100" hidden={isUsingMobile}>
-          Made by Radim Kotajny & Filip Valentiny | &copy;{" "}
-          {new Date().getFullYear()}
+        <Text
+          fontSize="xs"
+          my={4}
+          fontWeight="100"
+          display={{ base: "none", md: "block" }}
+        >
+          Made by Radim Kotajny & Filip Valentiny | <br /> Modified by Damián
+          Čmiel | &copy; {new Date().getFullYear()}
         </Text>
       </Flex>
     </Box>
