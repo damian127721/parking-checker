@@ -11,7 +11,7 @@ export default async function handler(
   const { query, method, body } = req;
   const rowStart = parseInt(body.rowStart as string, 10);
   const colStart = parseInt(body.colStart as string, 10);
-  /* const rotated = parseInt(body.rotated as string, 10); */
+  const rotated = body.rotated as boolean;
   const index = parseInt(body.index as string, 10);
 
   switch (method) {
@@ -41,7 +41,7 @@ export default async function handler(
         data: {
           rowStart,
           colStart,
-          /* rotated, */
+          rotated,
         },
       });
       res.status(200);

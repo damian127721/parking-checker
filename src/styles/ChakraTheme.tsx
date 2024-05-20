@@ -9,6 +9,8 @@ const config: ThemeConfig = {
 };
 
 const breakpoints = {
+  sm: "370px",
+  md: "768px",
   xl: "1150px",
 };
 

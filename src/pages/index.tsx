@@ -112,14 +112,12 @@ export default function Home() {
         }
       });
       setSpots([...Spots]);
-      console.log(Spots);
       setSpinner(false);
     }
   }, [data, error]);
   let Incrementer: number = 0;
   let statusColor: string;
   let sectors = [...Array(Math.round(uniqueLetterCount(Spots) / 2) + 1).keys()];
-  console.log(sectors);
 
   const { colorMode, toggleColorMode } = useColorMode();
 
@@ -180,10 +178,6 @@ export default function Home() {
               current.id[0].toLowerCase() ==
               alphabet[sector + increment].toLowerCase()
           );
-          console.log(
-            alphabet[sector + increment - 1].toLowerCase(),
-            alphabet[sector + increment].toLowerCase()
-          );
           return firstCol.length > secondCol.length
             ? firstCol.length
             : secondCol.length;
@@ -210,6 +204,7 @@ export default function Home() {
       index: mouseDown.current + 1, // +1 because db indexing starts from 1
       rowStart: sectorCoordinates[mouseDown.current]?.rowStart,
       colStart: sectorCoordinates[mouseDown.current]?.colStart,
+      rotated: sectorCoordinates[mouseDown.current]?.rotated,
     });
 
     mouseDown.current = -1;
@@ -259,6 +254,23 @@ export default function Home() {
         });
       }
     }
+  }
+
+  function toggleRotated(sectorToRotate: number) {
+    console.log("hej");
+    setSectorCoordinates((prev) => {
+      let newCoordinates = [...prev];
+      newCoordinates[sectorToRotate].rotated =
+        !newCoordinates[sectorToRotate].rotated;
+      fetcherP("/api/sectorCoordinates", {
+        password: editAccessPassword.current,
+        index: sectorToRotate + 1, // +1 because db indexing starts from 1
+        rowStart: newCoordinates[sectorToRotate].rowStart,
+        colStart: newCoordinates[sectorToRotate].colStart,
+        rotated: true,
+      });
+      return newCoordinates;
+    });
   }
 
   function passwordAuthorizer() {
@@ -393,7 +405,8 @@ export default function Home() {
               mt={5}
               bg={colorMode === "light" ? "gray.100" : "gray.700"}
               templateRows={{
-                base: `repeat(${minRows}, 36px)`,
+                base: `repeat(${minRows}, 26px)`,
+                sm: `repeat(${minRows}, 36px)`,
                 md: `repeat(${rows}, 36px)`,
                 xl: `repeat(${rows}, 1fr)`,
               }}
@@ -422,7 +435,7 @@ export default function Home() {
                     gridColumnStart={sectorCoordinates[sector].colStart}
                     border={{ base: "1px solid", md: "none" }}
                     className="sector"
-                    /* position={"relative"} */
+                    position={"relative"}
                   >
                     <Flex direction="column" w="100%">
                       {Spots.map((current) => {
@@ -584,7 +597,8 @@ export default function Home() {
                       right={0}
                       display="none"
                       hidden={editAccessGranted.current ? false : true}
-                      /* onClick={toggleColorMode} */
+                      onClick={() => toggleRotated(sector)}
+                      zIndex={9999}
                     >
                       <RepeatIcon />
                     </IconButton>

@@ -7,5 +7,5 @@ export interface SectorCoordinates {
   index: number;
   rowStart: number;
   colStart: number;
-  rotated: number;
+  rotated: boolean;
 }
