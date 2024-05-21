@@ -127,7 +127,7 @@ export default function Home() {
   const mouseDown = useRef<number>(-1);
   const editAccessGranted = useRef<boolean>(false);
   const editAccessPassword = useRef("");
-  const rows: number = 11;
+  const rows: number = 13;
   const cols: number = 5;
   const [minCols, setMinCols] = useState<number>(1);
   const [minRows, setMinRows] = useState<number>(1);
@@ -204,7 +204,6 @@ export default function Home() {
       index: mouseDown.current + 1, // +1 because db indexing starts from 1
       rowStart: sectorCoordinates[mouseDown.current]?.rowStart,
       colStart: sectorCoordinates[mouseDown.current]?.colStart,
-      rotated: sectorCoordinates[mouseDown.current]?.rotated,
     });
 
     mouseDown.current = -1;
@@ -267,7 +266,7 @@ export default function Home() {
         index: sectorToRotate + 1, // +1 because db indexing starts from 1
         rowStart: newCoordinates[sectorToRotate].rowStart,
         colStart: newCoordinates[sectorToRotate].colStart,
-        rotated: true,
+        rotated: newCoordinates[sectorToRotate].rotated,
       });
       return newCoordinates;
     });
@@ -426,7 +425,9 @@ export default function Home() {
                           ? "blackAlpha.400"
                           : "whiteAlpha.400",
                     }}
-                    direction="row"
+                    direction={`${
+                      sectorCoordinates[sector]?.rotated ? "column" : "row"
+                    }`}
                     key={sector}
                     w="100%"
                     borderRadius="md"
@@ -437,7 +438,13 @@ export default function Home() {
                     className="sector"
                     position={"relative"}
                   >
-                    <Flex direction="column" w="100%">
+                    <Flex
+                      direction={`${
+                        sectorCoordinates[sector]?.rotated ? "row" : "column"
+                      }`}
+                      w="100%"
+                      alignItems={"center"}
+                    >
                       {Spots.map((current) => {
                         if (
                           current.id[0]?.toLowerCase() ==
@@ -447,12 +454,16 @@ export default function Home() {
                           else if (current.status === 2) statusColor = "red";
                           else statusColor = "purple";
                           return (
-                            <Box key={current.id}>
+                            <Box
+                              key={current.id}
+                              w={{ base: "100%", md: "fit-content" }}
+                              h={"fit-content"}
+                            >
                               <Popover>
                                 <PopoverTrigger>
                                   <Button
                                     w={{
-                                      base: "fit-content",
+                                      base: "100%",
                                       md: "fit-content",
                                     }}
                                     color="white"
@@ -514,8 +525,16 @@ export default function Home() {
                         }
                       })}
                     </Flex>
-                    <Divider orientation="vertical" />
-                    <Flex direction="column" w="100%">
+                    {sectorCoordinates[sector].rotated || (
+                      <Divider orientation="vertical" />
+                    )}
+                    <Flex
+                      direction={`${
+                        sectorCoordinates[sector]?.rotated ? "row" : "column"
+                      }`}
+                      w="100%"
+                      alignItems={"center"}
+                    >
                       {Spots.map((current) => {
                         if (
                           current.id[0]?.toLowerCase() ==
@@ -525,7 +544,10 @@ export default function Home() {
                           else if (current.status === 2) statusColor = "red";
                           else statusColor = "purple";
                           return (
-                            <Box key={current.id}>
+                            <Box
+                              key={current.id}
+                              w={{ base: "100%", md: "fit-content" }}
+                            >
                               <Popover>
                                 <PopoverTrigger>
                                   <Button
@@ -577,6 +599,7 @@ export default function Home() {
                                   </PopoverBody>
                                 </PopoverContent>
                               </Popover>
+
                               <Divider
                                 mt={-2}
                                 orientation="horizontal"
