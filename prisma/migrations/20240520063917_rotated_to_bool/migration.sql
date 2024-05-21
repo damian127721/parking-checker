@@ -1,0 +1,9 @@
+/*
+  Warnings:
+
+  - The `rotated` column on the `SectorCoordinates` table would be dropped and recreated. This will lead to data loss if there is data in the column.
+
+*/
+-- AlterTable
+ALTER TABLE "SectorCoordinates" DROP COLUMN "rotated",
+ADD COLUMN     "rotated" BOOLEAN NOT NULL DEFAULT false;
