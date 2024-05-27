@@ -18,7 +18,7 @@ model Spot {
 
 model SectorCoordinates {
     index Int @unique
-    rowStart Int
-    colStart Int
+    rowStart Int @default(0)
+    colStart Int @default(0)
     rotated Boolean @default(false)
 }

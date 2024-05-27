@@ -30,6 +30,8 @@ import {
   MoonIcon,
   SunIcon,
   RepeatIcon,
+  SmallCloseIcon,
+  AddIcon,
 } from "@chakra-ui/icons";
 import React, { use, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
@@ -74,6 +76,14 @@ const fetcherP = (url: string, rawObject: Object) => {
     },
   });
 };
+const fetcherD = (url: string) => {
+  return fetch(url, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+};
 
 function uniqueLetterCount(Spots: Spot[]): number {
   let newArray: String[] = ["a"];
@@ -105,28 +115,35 @@ export default function Home() {
     //console.log(error)
     setSpinner(true);
     if (data) {
-      data.map((item: Spot) => {
-        if (item) {
-          //console.log(item)
-          Spots.push(item);
+      const sortedData = data.sort(
+        ({ id: a }: { id: string }, { id: b }: { id: string }) => {
+          return parseInt(a.slice(1)) - parseInt(b.slice(1));
         }
-      });
-      setSpots([...Spots]);
+      );
+      console.log(sortedData);
+      setSpots(sortedData);
       setSpinner(false);
     }
   }, [data, error]);
   let Incrementer: number = 0;
   let statusColor: string;
-  let sectors = [...Array(Math.round(uniqueLetterCount(Spots) / 2) + 1).keys()];
 
   const { colorMode, toggleColorMode } = useColorMode();
 
   /* <-- EDITABILITY FEATURE --> */
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const {
+    isOpen: isOpen2,
+    onOpen: onOpen2,
+    onClose: onClose2,
+  } = useDisclosure();
   const startingCoordinates = useRef({ x: 0, y: 0 });
   const mouseDown = useRef<number>(-1);
-  const editAccessGranted = useRef<boolean>(false);
+  const [editAccessGranted, setEditAccessGranted] = useState<boolean>(false);
   const editAccessPassword = useRef("");
+  const ID = useRef("");
+  const EUI = useRef("");
+  const status = useRef(1);
   const rows: number = 13;
   const cols: number = 5;
   const [minCols, setMinCols] = useState<number>(1);
@@ -149,47 +166,64 @@ export default function Home() {
   });
   const [rowsEnds, setRowsEnds] = useState<number[]>([]);
 
+  let [sectors, setSectors] = useState<number[]>([]);
   useEffect(() => {
-    if (sectorData) {
-      setSectorCoordinates(
-        sectorData.sort(
-          ({ index: a }: { index: number }, { index: b }: { index: number }) =>
-            a - b
+    if (!sectorData) return;
+    const sortedSectorData = sectorData.sort(
+      ({ index: a }: { index: number }, { index: b }: { index: number }) =>
+        a - b
+    );
+
+    setSectorCoordinates(sortedSectorData);
+    setSectors([...Array(Math.round(sortedSectorData.length)).keys()]);
+    setMinCols(
+      Math.max(
+        ...sectorData.map(
+          (item, index) =>
+            item.colStart +
+            (sortedSectorData[index].rotated
+              ? Math.ceil(rowsEnds[index] / 3)
+              : 0) -
+            1 // -1 because there is one more lines thar columns
         )
-      );
-      setMinCols(Math.max(...sectorData.map((item) => item.colStart)));
-    }
+      )
+    );
   }, [sectorData]);
 
   useEffect(() => {
     let increment: number = 0;
     const rowsEndsArray: number[] = sectors.map((sector: number) => {
       increment++;
-      return (
-        sectorCoordinates[sector].rowStart +
-        ((): number => {
-          let firstCol: Spot[] = Spots.filter(
-            (current: Spot) =>
-              current.id[0].toLowerCase() ==
-              alphabet[sector + increment - 1].toLowerCase()
-          );
-          let secondCol: Spot[] = Spots.filter(
-            (current: Spot) =>
-              current.id[0].toLowerCase() ==
-              alphabet[sector + increment].toLowerCase()
-          );
-          return firstCol.length > secondCol.length
-            ? firstCol.length
-            : secondCol.length;
-        })()
-      );
+      return ((): number => {
+        let firstCol: Spot[] = Spots.filter(
+          (current: Spot) =>
+            current.id[0].toLowerCase() ==
+            alphabet[sector + increment - 1].toLowerCase()
+        );
+        let secondCol: Spot[] = Spots.filter(
+          (current: Spot) =>
+            current.id[0].toLowerCase() ==
+            alphabet[sector + increment].toLowerCase()
+        );
+        return firstCol.length > secondCol.length
+          ? firstCol.length
+          : secondCol.length;
+      })();
     });
     setRowsEnds(rowsEndsArray);
-    setMinRows(Math.max(...rowsEndsArray) - 1);
+    setMinRows(
+      Math.max(
+        ...rowsEndsArray.map(
+          (elem, index) =>
+            (sectorCoordinates[index].rotated ? 2 : elem) +
+            sectorCoordinates[index].rowStart
+        )
+      ) - 1
+    );
   }, [sectorCoordinates, Spots]);
 
   function mouseDownHandler(e: React.MouseEvent, sector: number) {
-    if (editAccessGranted.current === false) return;
+    if (editAccessGranted === false) return;
     startingCoordinates.current = {
       x: e.clientX,
       y: e.clientY,
@@ -222,7 +256,15 @@ export default function Home() {
         };
         setSectorCoordinates((prev) => {
           let newCoordinates = [...prev];
-          if (xDiff > 0 && prev[mouseDown.current].colStart + 1 <= cols) {
+          if (
+            xDiff > 0 &&
+            (newCoordinates[mouseDown.current]?.rotated
+              ? Math.ceil(rowsEnds[mouseDown.current] / 3)
+              : 1) +
+              prev[mouseDown.current].colStart +
+              1 <=
+              cols + 1
+          ) {
             // because of 1 to be moved
             newCoordinates[mouseDown.current].colStart += 1;
           }
@@ -245,7 +287,15 @@ export default function Home() {
           ) {
             newCoordinates[mouseDown.current].rowStart -= 1;
           }
-          if (yDiff > 0 && rowsEnds[mouseDown.current] + 1 <= rows + 1) {
+          if (
+            yDiff > 0 &&
+            (newCoordinates[mouseDown.current]?.rotated
+              ? 2
+              : rowsEnds[mouseDown.current]) +
+              sectorCoordinates[mouseDown.current].rowStart +
+              1 <=
+              rows + 1
+          ) {
             //rows + 1 because there is one more line than rows
             newCoordinates[mouseDown.current].rowStart += 1;
           }
@@ -256,7 +306,6 @@ export default function Home() {
   }
 
   function toggleRotated(sectorToRotate: number) {
-    console.log("hej");
     setSectorCoordinates((prev) => {
       let newCoordinates = [...prev];
       newCoordinates[sectorToRotate].rotated =
@@ -276,9 +325,9 @@ export default function Home() {
     fetcherP("/api/authorize", { password: editAccessPassword.current }).then(
       (res) => {
         if (res.status === 200) {
-          editAccessGranted.current = true;
+          setEditAccessGranted(true);
         } else {
-          editAccessGranted.current = false;
+          setEditAccessGranted(false);
         }
       }
     );
@@ -288,7 +337,7 @@ export default function Home() {
     // CTRL + A, opens admin login modal for access to editability
     if (e.key === "a") {
       if (e.getModifierState("Control")) {
-        editAccessGranted.current = false;
+        setEditAccessGranted(false);
         editAccessPassword.current = "";
         onOpen();
       }
@@ -334,6 +383,59 @@ export default function Home() {
             </ModalFooter>
           </ModalContent>
         </Modal>
+        <Modal isOpen={isOpen2} onClose={onClose2}>
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>Add Spot</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <Input
+                placeholder="ID"
+                onChange={(e) => {
+                  ID.current = e.target.value;
+                }}
+              />
+              <Input
+                placeholder="EUI"
+                onChange={(e) => {
+                  EUI.current = e.target.value;
+                }}
+              />
+              <Input
+                placeholder="status"
+                onChange={(e) => {
+                  status.current = parseInt(e.target.value);
+                }}
+              />
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  fetcherP("/api/sectorCoordinates?action=create", {
+                    index: sectorCoordinates.length + 1,
+                    password: editAccessPassword.current,
+                  })
+                }
+              >
+                Add Sector
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  fetcherP("/api/parking?action=create", {
+                    id: ID.current,
+                    EUI: EUI.current,
+                    data: status.current,
+                    password: editAccessPassword.current,
+                  })
+                }
+              >
+                Create Spot
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
         <Text
           as="h1"
           fontWeight="thin"
@@ -374,6 +476,11 @@ export default function Home() {
               </PopoverBody>
             </PopoverContent>
           </Popover>
+          {editAccessGranted && (
+            <IconButton aria-label="add-spot" onClick={onOpen2}>
+              <AddIcon />
+            </IconButton>
+          )}
         </Flex>
         <Flex
           flexDirection={"column"}
@@ -392,12 +499,13 @@ export default function Home() {
             <Spinner size="xl" mt={{ base: 100 }} color="teal.500" />
           ) : (
             <Grid
+              overflow={"hidden"}
               flexShrink={2}
               h={{ base: "fit-content" }}
-              w={{ base: "100%", md: "fit-content" }}
+              w={{ base: "100vw", md: "fit-content" }}
               templateColumns={{
                 base: `repeat(${minCols}, 1fr)`,
-                md: `repeat(${cols}, 1fr)`,
+                md: `repeat(${editAccessGranted ? cols : minCols}, 1fr)`,
               }}
               p={{ base: 0, md: 5 }}
               m={{ base: 0, md: 5 }}
@@ -406,11 +514,10 @@ export default function Home() {
               templateRows={{
                 base: `repeat(${minRows}, 26px)`,
                 sm: `repeat(${minRows}, 36px)`,
-                md: `repeat(${rows}, 36px)`,
-                xl: `repeat(${rows}, 1fr)`,
+                md: `repeat(${editAccessGranted ? rows : minRows}, 36px)`,
+                xl: `repeat(${editAccessGranted ? rows : minRows}, 1fr)`,
               }}
               grid-flow-row="true"
-              border={{ base: "0", md: "1px solid" }}
               gap={{ base: 0, md: 1 }}
             >
               {sectors.map((sector: number) => {
@@ -432,11 +539,23 @@ export default function Home() {
                     w="100%"
                     borderRadius="md"
                     gridRowStart={sectorCoordinates[sector].rowStart}
-                    gridRowEnd={rowsEnds[sector]}
+                    gridRowEnd={
+                      sectorCoordinates[sector].rotated
+                        ? sectorCoordinates[sector].rowStart + 2
+                        : rowsEnds[sector] + sectorCoordinates[sector].rowStart
+                    }
                     gridColumnStart={sectorCoordinates[sector].colStart}
+                    gridColumnEnd={
+                      sectorCoordinates[sector].rotated
+                        ? Math.ceil(rowsEnds[sector] / 3) +
+                          sectorCoordinates[sector].colStart
+                        : "auto"
+                    }
                     border={{ base: "1px solid", md: "none" }}
                     className="sector"
                     position={"relative"}
+                    top="0"
+                    left="0"
                   >
                     <Flex
                       direction={`${
@@ -444,6 +563,7 @@ export default function Home() {
                       }`}
                       w="100%"
                       alignItems={"center"}
+                      position={"relative"}
                     >
                       {Spots.map((current) => {
                         if (
@@ -458,6 +578,7 @@ export default function Home() {
                               key={current.id}
                               w={{ base: "100%", md: "fit-content" }}
                               h={"fit-content"}
+                              position={"relative"}
                             >
                               <Popover>
                                 <PopoverTrigger>
@@ -504,7 +625,7 @@ export default function Home() {
                                         <span>
                                           {" "}
                                           unknown. <br />
-                                          Please check arduino's sensor.
+                                          Please check arduino&apos;s sensor.
                                         </span>
                                       ) : (
                                         ""
@@ -520,6 +641,19 @@ export default function Home() {
                                 h="2px"
                                 display={{ base: "none", md: "block" }}
                               />
+                              {editAccessGranted && (
+                                <SmallCloseIcon
+                                  display={"block"}
+                                  position={"absolute"}
+                                  bottom={0}
+                                  left={0}
+                                  cursor={"pointer"}
+                                  zIndex={1}
+                                  onClick={() =>
+                                    fetcherD("/api/parking?id=" + current.id)
+                                  }
+                                />
+                              )}
                             </Box>
                           );
                         }
@@ -547,10 +681,12 @@ export default function Home() {
                             <Box
                               key={current.id}
                               w={{ base: "100%", md: "fit-content" }}
+                              position={"relative"}
                             >
                               <Popover>
                                 <PopoverTrigger>
                                   <Button
+                                    position={"relative"}
                                     color="white"
                                     p={{ base: 0, md: 3 }}
                                     px={{ base: 0, md: 5 }}
@@ -590,7 +726,7 @@ export default function Home() {
                                         <span>
                                           {" "}
                                           unknown. <br />
-                                          Please check arduino's sensor.
+                                          Please check arduino&apos;s sensor.
                                         </span>
                                       ) : (
                                         ""
@@ -607,6 +743,19 @@ export default function Home() {
                                 h="2px"
                                 display={{ base: "none", md: "block" }}
                               />
+                              {editAccessGranted && (
+                                <SmallCloseIcon
+                                  display={"block"}
+                                  position={"absolute"}
+                                  bottom={0}
+                                  left={0}
+                                  cursor={"pointer"}
+                                  zIndex={1}
+                                  onClick={() =>
+                                    fetcherD("/api/parking?id=" + current.id)
+                                  }
+                                />
+                              )}
                             </Box>
                           );
                         }
@@ -618,10 +767,8 @@ export default function Home() {
                       position={"absolute"}
                       bottom={0}
                       right={0}
-                      display="none"
-                      hidden={editAccessGranted.current ? false : true}
+                      hidden={editAccessGranted ? false : true}
                       onClick={() => toggleRotated(sector)}
-                      zIndex={9999}
                     >
                       <RepeatIcon />
                     </IconButton>

@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { Spot, SectorCoordinates } from "@/pages/spot";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
+import { compare } from "bcrypt";
 
 export default async function handler(
   req: NextApiRequest,
@@ -11,6 +12,17 @@ export default async function handler(
   const { query, method, body } = req;
   const status = parseInt(body.data as string, 10);
   const EUI = body.EUI as string;
+  const id = body.id;
+  console.log(body);
+  if (method != "GET" && method != "DELETE") {
+    const result = await compare(body.password, process.env.PASSWORD as string);
+    if (!result) {
+      res.status(401).json({ error: "Unauthorized" });
+      res.end();
+      return;
+    }
+  }
+
   switch (method) {
     case "GET":
       // @ts-ignore
@@ -23,15 +35,36 @@ export default async function handler(
       res.status(200).json(allSpots);
       res.end();
       break;
-    case "POST":
-      const spot: Spot = await prisma.spot.update({
+    case "DELETE":
+      const deleteId = query.id as string;
+      const spot: Spot = await prisma.spot.delete({
         where: {
-          EUI: EUI,
-        },
-        data: {
-          status: status,
+          id: deleteId,
         },
       });
+      res.status(200);
+      res.end();
+      break;
+    case "POST":
+      if (query.action === "create") {
+        const spot: Spot = await prisma.spot.create({
+          data: {
+            EUI: EUI,
+            status: status,
+            id: id,
+          },
+        });
+      } else {
+        const spot: Spot = await prisma.spot.update({
+          where: {
+            EUI: EUI,
+          },
+          data: {
+            status: status,
+          },
+        });
+      }
+
       res.status(200);
       res.end();
       break;

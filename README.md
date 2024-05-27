@@ -31,6 +31,7 @@
   - Unknown state (Purple) - corresponding to value 3
 - Accessing editability for moving sectors
   - Press key CTRL + A to open admin modal login and enter password saved in .env hash format
+  - ! When creating new Spots remember they are sorted alphabeticaly and one sector can handle 2 letters, therefore you must firstly create a new sector(the option is in the same modal), if the spot isn't consequent to avaible spots , otherwise you will get an error and you need to remove the new spot from database
 - Progress of getting data
   - Arduino -> LoraWAN -> Cloud Server -> API -> NextJS browser Client
   - Each change will take up apx. to 5 seconds.
