@@ -13,7 +13,6 @@ export default async function handler(
   const status = parseInt(body.data as string, 10);
   const EUI = body.EUI as string;
   const id = body.id;
-  console.log(body);
   if (method != "GET" && method != "DELETE") {
     const result = await compare(body.password, process.env.PASSWORD as string);
     if (!result) {

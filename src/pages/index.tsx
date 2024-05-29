@@ -36,6 +36,7 @@ import {
 import React, { use, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Spot, SectorCoordinates } from "@/pages/spot";
+import { preProcessFile } from "typescript";
 
 const alphabet = [
   "A",
@@ -85,7 +86,7 @@ const fetcherD = (url: string) => {
   });
 };
 
-function uniqueLetterCount(Spots: Spot[]): number {
+/* function uniqueLetterCount(Spots: Spot[]): number {
   let newArray: String[] = ["a"];
 
   Spots.map((spot: Spot): void => {
@@ -93,15 +94,15 @@ function uniqueLetterCount(Spots: Spot[]): number {
   });
   let uniqueChars: String[] = [...new Set(newArray)];
   return uniqueChars.length;
-}
+} */
 
 export default function Home() {
   const [spinner, setSpinner] = useState(false);
 
-  const initialSpot: Spot = {
+  /* const initialSpot: Spot = {
     id: "",
     status: 0,
-  };
+  }; */
   const url = "/api/parking";
 
   const [Spots, setSpots] = useState<Spot[]>([]);
@@ -120,7 +121,7 @@ export default function Home() {
           return parseInt(a.slice(1)) - parseInt(b.slice(1));
         }
       );
-      console.log(sortedData);
+      //  console.log(sortedData);
       setSpots(sortedData);
       setSpinner(false);
     }
@@ -144,8 +145,8 @@ export default function Home() {
   const ID = useRef("");
   const EUI = useRef("");
   const status = useRef(1);
-  const rows: number = 13;
-  const cols: number = 5;
+  const rows: number = 13; // Can be adjusted
+  const cols: number = 5; // Can be adjusted
   const [minCols, setMinCols] = useState<number>(1);
   const [minRows, setMinRows] = useState<number>(1);
   const maxSectors: number = 10;
@@ -157,13 +158,9 @@ export default function Home() {
     fetcher
   );
 
-  const [sectorCoordinates, setSectorCoordinates] = useState(() => {
-    let newArr: any[] = [];
-    for (let i = 0; i < maxSectors; i++) {
-      newArr.push({ rowStart: 1, colStart: i * 2 });
-    }
-    return newArr;
-  });
+  const [sectorCoordinates, setSectorCoordinates] = useState<
+    SectorCoordinates[]
+  >([]);
   const [rowsEnds, setRowsEnds] = useState<number[]>([]);
 
   let [sectors, setSectors] = useState<number[]>([]);
@@ -176,25 +173,33 @@ export default function Home() {
 
     setSectorCoordinates(sortedSectorData);
     setSectors([...Array(Math.round(sortedSectorData.length)).keys()]);
+  }, [sectorData]);
+
+  useEffect(() => {
     setMinCols(
       Math.max(
-        ...sectorData.map(
+        ...sectorCoordinates.map(
           (item, index) =>
             item.colStart +
-            (sortedSectorData[index].rotated
+            (sectorCoordinates[index].rotated
               ? Math.ceil(rowsEnds[index] / 3)
               : 0) -
             1 // -1 because there is one more lines thar columns
         )
       )
     );
-  }, [sectorData]);
+  }, [sectorCoordinates]);
+
+  const [secondRotatedColsLengths, setSecondRotatedColsLengths] = useState<
+    number[]
+  >([]);
 
   useEffect(() => {
     let increment: number = 0;
     const rowsEndsArray: number[] = sectors.map((sector: number) => {
       increment++;
-      return ((): number => {
+      const secondColsArray: number[] = [];
+      const endsArray = ((): number => {
         let firstCol: Spot[] = Spots.filter(
           (current: Spot) =>
             current.id[0].toLowerCase() ==
@@ -205,18 +210,24 @@ export default function Home() {
             current.id[0].toLowerCase() ==
             alphabet[sector + increment].toLowerCase()
         );
+        secondColsArray.push(secondCol.length);
         return firstCol.length > secondCol.length
           ? firstCol.length
           : secondCol.length;
       })();
+      setSecondRotatedColsLengths(secondColsArray);
+      return endsArray;
     });
     setRowsEnds(rowsEndsArray);
     setMinRows(
       Math.max(
         ...rowsEndsArray.map(
           (elem, index) =>
-            (sectorCoordinates[index].rotated ? 2 : elem) +
-            sectorCoordinates[index].rowStart
+            (sectorCoordinates[index].rotated
+              ? secondRotatedColsLengths[index] > 0
+                ? 2
+                : 1
+              : elem) + sectorCoordinates[index].rowStart
         )
       ) - 1
     );
@@ -411,25 +422,56 @@ export default function Home() {
             <ModalFooter>
               <Button
                 variant="ghost"
-                onClick={() =>
+                onClick={() => {
+                  fetcherD(
+                    "/api/sectorCoordinates?index=" + sectorCoordinates.length
+                  );
+                  setSectorCoordinates((prev) => {
+                    return prev.slice(0, -1);
+                  });
+                  setSectors((prev) => prev.slice(0, -1));
+                }}
+                colorScheme="red"
+              >
+                Delete latest sector
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
                   fetcherP("/api/sectorCoordinates?action=create", {
                     index: sectorCoordinates.length + 1,
                     password: editAccessPassword.current,
-                  })
-                }
+                  });
+                  setSectorCoordinates((prev) => {
+                    return [
+                      ...prev,
+                      {
+                        rowStart: 1,
+                        colStart: 0,
+                        rotated: false,
+                        index: sectorCoordinates.length,
+                      },
+                    ];
+                  });
+                  setSectors((prev) => [...prev, sectorCoordinates.length]);
+                }}
               >
                 Add Sector
               </Button>
               <Button
-                variant="outline"
-                onClick={() =>
+                variant="ghost"
+                onClick={() => {
                   fetcherP("/api/parking?action=create", {
                     id: ID.current,
                     EUI: EUI.current,
                     data: status.current,
                     password: editAccessPassword.current,
-                  })
-                }
+                  });
+                  setSpots((prev) => [
+                    ...prev,
+                    { id: ID.current, status: status.current },
+                  ]);
+                }}
               >
                 Create Spot
               </Button>
@@ -484,7 +526,7 @@ export default function Home() {
         </Flex>
         <Flex
           flexDirection={"column"}
-          minH={{ base: "98vh", md: "fit-content" }}
+          minH={{ base: "90vh", md: "fit-content" }}
           justifyContent="center"
         >
           <IconButton
@@ -541,7 +583,9 @@ export default function Home() {
                     gridRowStart={sectorCoordinates[sector].rowStart}
                     gridRowEnd={
                       sectorCoordinates[sector].rotated
-                        ? sectorCoordinates[sector].rowStart + 2
+                        ? secondRotatedColsLengths[sector] > 0
+                          ? sectorCoordinates[sector].rowStart + 2
+                          : sectorCoordinates[sector].rowStart + 1
                         : rowsEnds[sector] + sectorCoordinates[sector].rowStart
                     }
                     gridColumnStart={sectorCoordinates[sector].colStart}
@@ -649,9 +693,14 @@ export default function Home() {
                                   left={0}
                                   cursor={"pointer"}
                                   zIndex={1}
-                                  onClick={() =>
-                                    fetcherD("/api/parking?id=" + current.id)
-                                  }
+                                  onClick={() => {
+                                    setSpots((prev) =>
+                                      prev.filter(
+                                        (spot) => spot.id !== current.id
+                                      )
+                                    );
+                                    fetcherD("/api/parking?id=" + current.id);
+                                  }}
                                 />
                               )}
                             </Box>
@@ -751,9 +800,14 @@ export default function Home() {
                                   left={0}
                                   cursor={"pointer"}
                                   zIndex={1}
-                                  onClick={() =>
-                                    fetcherD("/api/parking?id=" + current.id)
-                                  }
+                                  onClick={() => {
+                                    setSpots((prev) =>
+                                      prev.filter(
+                                        (spot) => spot.id !== current.id
+                                      )
+                                    );
+                                    fetcherD("/api/parking?id=" + current.id);
+                                  }}
                                 />
                               )}
                             </Box>
@@ -785,7 +839,7 @@ export default function Home() {
           display={{ base: "none", md: "block" }}
         >
           Made by Radim Kotajny & Filip Valentiny | <br /> Modified by Damián
-          Čmiel | &copy; {new Date().getFullYear()}
+          Čmiel & Antonín Vaněk | &copy; {new Date().getFullYear()}
         </Text>
       </Flex>
     </Box>

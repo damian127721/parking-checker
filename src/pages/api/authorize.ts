@@ -6,7 +6,6 @@ export default async function handler(
   res: NextApiResponse
 ) {
   const { query, method, body } = req;
-  console.log(body.password);
 
   switch (method) {
     case "POST":

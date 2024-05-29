@@ -13,7 +13,7 @@ export default async function handler(
   const colStart = parseInt(body.colStart as string, 10);
   const rotated = body.rotated as boolean;
   const index = parseInt(body.index as string, 10);
-  if (method != "GET") {
+  if (method != "GET" && method != "DELETE") {
     const result = await compare(body.password, process.env.PASSWORD as string);
     if (!result) {
       res.status(401).json({ error: "Unauthorized" });
@@ -31,9 +31,10 @@ export default async function handler(
       res.end();
       break;
     case "DELETE":
+      const deleteIndex = parseInt(query.index as string);
       const sector: SectorCoordinates = await prisma.sectorCoordinates.delete({
         where: {
-          index: index,
+          index: deleteIndex,
         },
       });
       res.status(200);
