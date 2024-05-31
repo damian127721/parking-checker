@@ -37,3 +37,16 @@
 - db
   - musí se tam vložit id př. "a1"
   - a musí se tam taky vložit EUI z ttn
+
+## Arduino V2
+- Na každém parkovacím místě bude jednotka Arduino Nano s LoRa modulem a senzorem vzdálenosti
+- Stanice vysílá svůj stav další a systém se řetězí až k centrální stanici(Arduino uno s WiFi nebo   gsm modulem)
+  - Tutoriál na gsm modul z obchodu dratek.cz
+    - https://navody.dratek.cz/navody-k-produktum/gsm-shield-sim900-gprs-a-thingspeak.html
+- Pinout
+  - Nano
+    - LoRa-- NSS-10, RST-9, DIO0-2, Senzor-- Trig-4,Echo-5,VCC-5V,GND-GND
+- LoRa stanice si přeposílají JSON, který je uložený v projektech jako proměnná jsonData
+
+- Program pro Uno moduly se senzorem je funkční, pouze je třeba vložit kód senzoru z projektu WifiParkingStation
+- Je možné že v programu centrální stanice bude třeba vyladit příjem většího počtu packetů
