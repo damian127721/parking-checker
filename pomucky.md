@@ -47,6 +47,6 @@
   - Nano
     - LoRa-- NSS-10, RST-9, DIO0-2, Senzor-- Trig-4,Echo-5,VCC-5V,GND-GND
 - LoRa stanice si přeposílají JSON, který je uložený v projektech jako proměnná jsonData
-
+- Pro provoz programů jsou potřeba knihovny LoRa, WiFiNINA a NewPing
 - Program pro Uno moduly se senzorem je funkční, pouze je třeba vložit kód senzoru z projektu WifiParkingStation
 - Je možné že v programu centrální stanice bude třeba vyladit příjem většího počtu packetů
